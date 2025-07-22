@@ -62,11 +62,20 @@ RUN for dir in /workspace/ComfyUI/custom_nodes/*/; do \
         fi; \
     done
 
-# Install SageAttention from source (their proven method)
+# Install SageAttention from source (with GPU architecture specification)
 RUN echo "📦 Installing SageAttention from source..." && \
+    # Set target GPU architectures for compilation without GPU present
+    export TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0" && \
+    export CUDA_ARCH_LIST="70;75;80;86;89;90" && \
+    export MAX_JOBS=4 && \
     git clone https://github.com/thu-ml/SageAttention.git && \
     cd SageAttention && \
-    python setup.py install && \
+    echo "🔍 Build environment:" && \
+    echo "Python: $(python --version)" && \
+    echo "CUDA: $(nvcc --version || echo 'nvcc not found')" && \
+    echo "PyTorch: $(python -c 'import torch; print(torch.__version__)')" && \
+    echo "Target GPU architectures: $TORCH_CUDA_ARCH_LIST" && \
+    python setup.py install --verbose && \
     cd .. && \
     rm -rf SageAttention && \
     echo "✅ SageAttention installed"
