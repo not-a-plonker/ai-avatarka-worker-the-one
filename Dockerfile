@@ -63,8 +63,8 @@ RUN for dir in /workspace/ComfyUI/custom_nodes/*/; do \
     done
 
 # Set target GPU architectures for compilation without GPU present
-ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0"
-ENV CUDA_ARCH_LIST="70;75;80;86;89;90"
+ENV TORCH_CUDA_ARCH_LIST="8.9;9.0"
+ENV CUDA_ARCH_LIST="89;90"
 ENV MAX_JOBS=4
 
 # Install SageAttention from source (with GPU architecture specification)
