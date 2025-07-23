@@ -23,10 +23,17 @@ from typing import Dict, Any, Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Network storage paths - get from environment or use defaults
+# Network storage paths - get from environment or detect automatically
 NETWORK_STORAGE_BASE = "/workspace"
-NETWORK_STORAGE_VENV = os.environ.get("NETWORK_STORAGE_VENV", "/workspace/venv")
-NETWORK_STORAGE_COMFYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
+NETWORK_STORAGE_VENV = "/workspace/venv"
+# ComfyUI path will be detected (could be comfywan or ComfyUI)
+NETWORK_STORAGE_COMFYUI = os.environ.get("COMFYUI_PATH", "/workspace/ComfyUI")
+
+# Runtime paths (will be set after validation)
+COMFYUI_PATH = None
+COMFYUI_SERVER = "127.0.0.1:8188"
+EFFECTS_CONFIG = "/workspace/prompts/effects.json"  # Back to workspace paths
+WORKFLOW_PATH = "/workspace/workflow/universal_i2v.json"  # Back to workspace pathsYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
 
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
