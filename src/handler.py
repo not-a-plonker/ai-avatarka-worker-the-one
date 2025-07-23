@@ -32,8 +32,8 @@ NETWORK_STORAGE_COMFYUI = os.environ.get("COMFYUI_PATH", "/workspace/ComfyUI")
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
 COMFYUI_SERVER = "127.0.0.1:8188"
-EFFECTS_CONFIG = "/workspace/prompts/effects.json"  # Back to workspace paths
-WORKFLOW_PATH = "/workspace/workflow/universal_i2v.json"  # Back to workspace pathsYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
+EFFECTS_CONFIG = "/prompts/effects.json"  # Files copied to network storage root
+WORKFLOW_PATH = "/workflow/universal_i2v.json"  # Files copied to network storage rootYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
 
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
@@ -367,25 +367,30 @@ def process_input_image(image_data: str) -> Optional[str]:
 def customize_workflow(workflow: Dict, params: Dict) -> Dict:
     """Customize workflow with effect and parameters"""
     try:
-        # Get effect configuration (effects.json has nested structure)
+        # Get effect configuration
         effects = effects_data.get('effects', {}) if effects_data else {}
         effect_config = effects.get(params['effect'], {})
         
-        # Update workflow nodes based on WanVideo workflow structure
+        # Update workflow nodes by replacing placeholders
         for node_id, node in workflow.items():
             node_type = node.get("class_type", "")
             
             # Update image input node (LoadImage)
             if node_type == "LoadImage":
-                if "inputs" in node:
-                    node["inputs"]["image"] = params["image_filename"]
+                if "inputs" in node and "image" in node["inputs"]:
+                    if node["inputs"]["image"] == "PLACEHOLDER_IMAGE":
+                        node["inputs"]["image"] = params["image_filename"]
             
-            # Update LoRA selection
+            # Update LoRA selection (WanVideoLoraSelect)
             elif node_type == "WanVideoLoraSelect":
                 if "inputs" in node:
                     lora_name = effect_config.get("lora", f"{params['effect']}.safetensors")
-                    node["inputs"]["lora_name"] = lora_name
-                    node["inputs"]["lora"] = lora_name  # Both fields need the same value
+                    if node["inputs"].get("lora_name") == "PLACEHOLDER_LORA":
+                        node["inputs"]["lora_name"] = lora_name
+                    if node["inputs"].get("lora") == "PLACEHOLDER_LORA":
+                        node["inputs"]["lora"] = lora_name
+                    # Set strength from effect config
+                    node["inputs"]["strength"] = effect_config.get("lora_strength", 1.0)
             
             # Update text prompts (WanVideoTextEncode)
             elif node_type == "WanVideoTextEncode":
@@ -394,8 +399,10 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
                     positive_prompt = params.get("prompt", effect_config.get("prompt", ""))
                     negative_prompt = params.get("negative_prompt", effect_config.get("negative_prompt", ""))
                     
-                    node["inputs"]["positive_prompt"] = positive_prompt
-                    node["inputs"]["negative_prompt"] = negative_prompt
+                    if node["inputs"].get("positive_prompt") == "PLACEHOLDER_PROMPT":
+                        node["inputs"]["positive_prompt"] = positive_prompt
+                    if node["inputs"].get("negative_prompt") == "PLACEHOLDER_NEGATIVE_PROMPT":
+                        node["inputs"]["negative_prompt"] = negative_prompt
             
             # Update sampling parameters (WanVideoSampler)
             elif node_type == "WanVideoSampler":
@@ -417,11 +424,9 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
                     node["inputs"]["generation_height"] = params.get("height", 720)
                     node["inputs"]["num_frames"] = params.get("frames", 85)
             
-            # Use SageAttention (handled by the ComfyUI node, not the handler)
+            # SageAttention is already set in the workflow
             elif node_type == "WanVideoModelLoader":
                 if "inputs" in node:
-                    # The workflow already has attention_mode: "sageattn"
-                    # No need to modify it here
                     logger.info("🎯 Found WanVideoModelLoader with SageAttention mode")
         
         logger.info(f"✅ Workflow customized for effect: {params['effect']}")
