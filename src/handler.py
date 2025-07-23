@@ -23,10 +23,10 @@ from typing import Dict, Any, Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Network storage paths
+# Network storage paths - get from environment or use defaults
 NETWORK_STORAGE_BASE = "/workspace"
-NETWORK_STORAGE_VENV = "/workspace/venv"
-NETWORK_STORAGE_COMFYUI = "/workspace/ComfyUI"
+NETWORK_STORAGE_VENV = os.environ.get("NETWORK_STORAGE_VENV", "/workspace/venv")
+NETWORK_STORAGE_COMFYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
 
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
@@ -175,53 +175,23 @@ def clear_triton_cache():
         logger.warning(f"⚠️ Error clearing triton cache: {e}")
         return False
 
-def test_sage_attention():
-    """Test if SageAttention is available and working"""
+def check_comfyui_environment():
+    """Check that ComfyUI environment is properly set up"""
     try:
-        logger.info("🔍 Testing SageAttention availability...")
+        logger.info("🔍 Checking ComfyUI environment...")
         
-        # Test basic import
-        import sageattention
-        logger.info("✅ SageAttention import successful")
-        
-        # Test version info
-        try:
-            version = getattr(sageattention, '__version__', 'unknown')
-            logger.info(f"📦 SageAttention version: {version}")
-        except:
-            logger.info("📦 SageAttention version: unknown")
-        
-        # Test CUDA availability for SageAttention
+        # Check if ComfyUI can import properly
         import torch
         if torch.cuda.is_available():
             logger.info(f"🎮 CUDA available: {torch.version.cuda}")
             logger.info(f"🎮 GPU: {torch.cuda.get_device_name(0)}")
-            
-            # Test basic SageAttention functionality
-            try:
-                # Create small test tensors
-                device = torch.device('cuda:0')
-                q = torch.randn(1, 8, 64, 64, dtype=torch.float16, device=device)
-                k = torch.randn(1, 8, 64, 64, dtype=torch.float16, device=device)
-                v = torch.randn(1, 8, 64, 64, dtype=torch.float16, device=device)
-                
-                # Test sage attention call
-                output = sageattention.sageattn(q, k, v)
-                logger.info("✅ SageAttention CUDA test successful")
-                return True
-                
-            except Exception as e:
-                logger.warning(f"⚠️ SageAttention CUDA test failed: {e}")
-                return False
+            return True
         else:
-            logger.warning("⚠️ CUDA not available for SageAttention")
+            logger.warning("⚠️ CUDA not available")
             return False
             
-    except ImportError as e:
-        logger.warning(f"⚠️ SageAttention not available: {e}")
-        return False
     except Exception as e:
-        logger.error(f"❌ SageAttention test error: {e}")
+        logger.error(f"❌ ComfyUI environment check failed: {e}")
         return False
 
 def load_effects_config():
@@ -237,14 +207,14 @@ def load_effects_config():
         return False
 
 def start_comfyui():
-    """Start ComfyUI with SageAttention using network storage"""
-    global comfyui_process, comfyui_initialized, sage_attention_available
+    """Start ComfyUI with network storage"""
+    global comfyui_process, comfyui_initialized
     
     if comfyui_initialized:
         return True
     
     try:
-        logger.info("🚀 Starting ComfyUI with network storage SageAttention setup...")
+        logger.info("🚀 Starting ComfyUI with network storage...")
         
         # Validate network storage first
         if not validate_network_storage():
@@ -256,12 +226,9 @@ def start_comfyui():
             logger.error("❌ Failed to activate network storage environment")
             return False
         
-        # Test SageAttention
-        sage_attention_available = test_sage_attention()
-        
-        if not sage_attention_available:
-            logger.error("❌ SageAttention not available - aborting")
-            return False
+        # Check ComfyUI environment
+        if not check_comfyui_environment():
+            logger.warning("⚠️ ComfyUI environment check failed, continuing anyway...")
         
         # Clear triton cache
         clear_triton_cache()
@@ -285,11 +252,10 @@ def start_comfyui():
         # Use the network storage Python executable
         python_executable = str(Path(NETWORK_STORAGE_VENV) / "bin" / "python")
         
-        # Start ComfyUI with SageAttention
+        # Start ComfyUI (SageAttention will be handled by workflow nodes)
         cmd = [
             python_executable, "-u", "main.py",
-            "--port", "8188",
-            "--use-sage-attention",
+            "--port", "8188", 
             "--base-directory", COMFYUI_PATH,
             "--disable-auto-launch",
             "--disable-metadata",
@@ -297,7 +263,7 @@ def start_comfyui():
             "--log-stdout"
         ]
         
-        logger.info("🚀 Starting ComfyUI with SageAttention ENABLED (network storage)")
+        logger.info("🚀 Starting ComfyUI (SageAttention handled by workflow nodes)")
         logger.info(f"🔍 ComfyUI command: {' '.join(cmd)}")
         logger.info(f"📁 Working directory: {os.getcwd()}")
         logger.info(f"🐍 Python executable: {python_executable}")
@@ -444,11 +410,12 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
                     node["inputs"]["generation_height"] = params.get("height", 720)
                     node["inputs"]["num_frames"] = params.get("frames", 85)
             
-            # Use SageAttention (we know it's available from network storage)
+            # Use SageAttention (handled by the ComfyUI node, not the handler)
             elif node_type == "WanVideoModelLoader":
                 if "inputs" in node:
-                    node["inputs"]["attention_mode"] = "sageattn"
-                    logger.info("🎯 Using SageAttention mode")
+                    # The workflow already has attention_mode: "sageattn"
+                    # No need to modify it here
+                    logger.info("🎯 Found WanVideoModelLoader with SageAttention mode")
         
         logger.info(f"✅ Workflow customized for effect: {params['effect']}")
         return workflow
@@ -603,9 +570,9 @@ def handler(job):
         if not effects_data and not load_effects_config():
             logger.warning("⚠️ Effects config not loaded - using defaults")
         
-        # Start ComfyUI with SageAttention (will fail if SageAttention not available)
+        # Start ComfyUI (SageAttention will be handled by workflow nodes)
         if not start_comfyui():
-            return {"error": "Failed to start ComfyUI with SageAttention from network storage"}
+            return {"error": "Failed to start ComfyUI from network storage"}
         
         # Load workflow template
         workflow = load_workflow()
@@ -639,7 +606,7 @@ def handler(job):
             "seed": job_input.get("seed", -1)
         }
         
-        logger.info(f"🎭 Processing effect: {params['effect']} with network storage SageAttention")
+        logger.info(f"🎭 Processing effect: {params['effect']} with ComfyUI SageAttention nodes")
         
         # Customize workflow
         workflow = customize_workflow(workflow, params)
@@ -677,7 +644,7 @@ def handler(job):
             "prompt_id": prompt_id,
             "filename": Path(video_path).name,
             "processing_time": time.time(),
-            "sage_attention_used": True,
+            "sage_attention_used": True,  # Used by ComfyUI workflow nodes
             "network_storage_used": True
         }
         

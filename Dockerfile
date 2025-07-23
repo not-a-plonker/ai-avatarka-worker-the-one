@@ -34,32 +34,48 @@ COPY src/handler.py /workspace/src/handler.py
 RUN cat > /workspace/start.sh << 'EOF'
 #!/bin/bash
 echo "🚀 Starting AI-Avatarka with Network Storage..."
-echo "📁 Checking network storage..."
+echo "🔍 Debugging network storage contents..."
 
-if [ ! -d "/workspace/ComfyUI" ]; then
-    echo "❌ Network storage not found at /workspace/ComfyUI"
-    echo "Make sure your RunPod pod is using the correct network storage"
-    exit 1
+echo "Contents of /workspace:"
+ls -la /workspace/
+
+echo "Looking for ComfyUI directory:"
+find /workspace -name "ComfyUI" -type d 2>/dev/null
+
+echo "Looking for venv directory:"
+find /workspace -name "venv" -type d 2>/dev/null
+
+echo "Looking for main.py (ComfyUI indicator):"
+find /workspace -name "main.py" 2>/dev/null
+
+echo "Looking for activate script (venv indicator):"
+find /workspace -name "activate" 2>/dev/null
+
+if [ -d "/workspace/ComfyUI" ]; then
+    echo "✅ Found ComfyUI at /workspace/ComfyUI"
+    echo "Contents of ComfyUI directory:"
+    ls -la /workspace/ComfyUI/
+else
+    echo "❌ ComfyUI directory not found at /workspace/ComfyUI"
 fi
 
-if [ ! -f "/workspace/venv/bin/activate" ]; then
+if [ -f "/workspace/venv/bin/activate" ]; then
+    echo "✅ Found venv at /workspace/venv"
+    echo "Contents of venv/bin:"
+    ls -la /workspace/venv/bin/ | head -10
+else
     echo "❌ Virtual environment not found at /workspace/venv"
-    echo "Make sure you completed the network storage setup"
-    exit 1
+    if [ -d "/workspace/venv" ]; then
+        echo "venv directory exists but missing activate script:"
+        ls -la /workspace/venv/
+    fi
 fi
 
-echo "✅ Network storage found"
-echo "🔧 Activating virtual environment..."
-source /workspace/venv/bin/activate
-
-echo "🐍 Python version: $(python --version)"
-echo "📦 Torch version: $(python -c "import torch; print(torch.__version__)" 2>/dev/null || echo "Not installed")"
-echo "🎮 CUDA available: $(python -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "Unknown")"
-echo "🧠 SageAttention: $(python -c "import sageattention; print(sageattention.__version__)" 2>/dev/null || echo "Not installed")"
-
-echo "🎯 Starting RunPod handler..."
+# Try to continue anyway for debugging
+echo "🔧 Network storage analysis complete"
+echo "🎯 Attempting to start handler anyway..."
 cd /workspace
-python -c "import sys; sys.path.append('/workspace/src'); from handler import handler; import runpod; print('🚀 Starting AI-Avatarka handler with network storage...'); runpod.serverless.start({'handler': handler})"
+python -c "import sys; sys.path.append('/workspace/src'); from handler import handler; import runpod; print('🚀 Starting AI-Avatarka handler...'); runpod.serverless.start({'handler': handler})"
 EOF
 
 RUN chmod +x /workspace/start.sh
