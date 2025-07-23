@@ -31,34 +31,38 @@ COPY prompts/ /workspace/prompts/
 COPY src/handler.py /workspace/src/handler.py
 
 # Create startup script that uses network storage environment
-RUN echo '#!/bin/bash\n\
-echo "🚀 Starting AI-Avatarka with Network Storage..."\n\
-echo "📁 Checking network storage..."\n\
-if [ ! -d "/workspace/ComfyUI" ]; then\n\
-    echo "❌ Network storage not found at /workspace/ComfyUI"\n\
-    echo "Make sure your RunPod pod is using the correct network storage"\n\
-    exit 1\n\
-fi\n\
-\n\
-if [ ! -f "/workspace/venv/bin/activate" ]; then\n\
-    echo "❌ Virtual environment not found at /workspace/venv"\n\
-    echo "Make sure you completed the network storage setup"\n\
-    exit 1\n\
-fi\n\
-\n\
-echo "✅ Network storage found"\n\
-echo "🔧 Activating virtual environment..."\n\
-source /workspace/venv/bin/activate\n\
-\n\
-echo "🐍 Python version: $(python --version)"\n\
-echo "📦 Torch version: $(python -c \"import torch; print(torch.__version__)\" 2>/dev/null || echo \"Not installed\")"\n\
-echo "🎮 CUDA available: $(python -c \"import torch; print(torch.cuda.is_available())\" 2>/dev/null || echo \"Unknown\")"\n\
-echo "🧠 SageAttention: $(python -c \"import sageattention; print(sageattention.__version__)\" 2>/dev/null || echo \"Not installed\")"\n\
-\n\
-echo "🎯 Starting RunPod handler..."\n\
-cd /workspace\n\
-python -c "import sys; sys.path.append(\"/workspace/src\"); from handler import handler; import runpod; print(\"🚀 Starting AI-Avatarka handler with network storage...\"); runpod.serverless.start({\"handler\": handler})"\n\
-' > /workspace/start.sh && chmod +x /workspace/start.sh
+RUN cat > /workspace/start.sh << 'EOF'
+#!/bin/bash
+echo "🚀 Starting AI-Avatarka with Network Storage..."
+echo "📁 Checking network storage..."
+
+if [ ! -d "/workspace/ComfyUI" ]; then
+    echo "❌ Network storage not found at /workspace/ComfyUI"
+    echo "Make sure your RunPod pod is using the correct network storage"
+    exit 1
+fi
+
+if [ ! -f "/workspace/venv/bin/activate" ]; then
+    echo "❌ Virtual environment not found at /workspace/venv"
+    echo "Make sure you completed the network storage setup"
+    exit 1
+fi
+
+echo "✅ Network storage found"
+echo "🔧 Activating virtual environment..."
+source /workspace/venv/bin/activate
+
+echo "🐍 Python version: $(python --version)"
+echo "📦 Torch version: $(python -c "import torch; print(torch.__version__)" 2>/dev/null || echo "Not installed")"
+echo "🎮 CUDA available: $(python -c "import torch; print(torch.cuda.is_available())" 2>/dev/null || echo "Unknown")"
+echo "🧠 SageAttention: $(python -c "import sageattention; print(sageattention.__version__)" 2>/dev/null || echo "Not installed")"
+
+echo "🎯 Starting RunPod handler..."
+cd /workspace
+python -c "import sys; sys.path.append('/workspace/src'); from handler import handler; import runpod; print('🚀 Starting AI-Avatarka handler with network storage...'); runpod.serverless.start({'handler': handler})"
+EOF
+
+RUN chmod +x /workspace/start.sh
 
 # Set working directory
 WORKDIR /workspace
