@@ -1,6 +1,6 @@
 """
 AI-Avatarka RunPod Serverless Worker Handler
-Clean slate with proven SageAttention setup
+Updated for Network Storage Setup
 """
 
 import runpod
@@ -23,8 +23,13 @@ from typing import Dict, Any, Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Constants - Clean paths
-COMFYUI_PATH = "/workspace/ComfyUI"
+# Network storage paths
+NETWORK_STORAGE_BASE = "/workspace"
+NETWORK_STORAGE_VENV = "/workspace/venv"
+NETWORK_STORAGE_COMFYUI = "/workspace/ComfyUI"
+
+# Runtime paths (will be set after validation)
+COMFYUI_PATH = None
 COMFYUI_SERVER = "127.0.0.1:8188"
 EFFECTS_CONFIG = "/workspace/prompts/effects.json"
 WORKFLOW_PATH = "/workspace/workflow/universal_i2v.json"
@@ -34,6 +39,108 @@ comfyui_process = None
 comfyui_initialized = False
 effects_data = None
 sage_attention_available = False
+environment_validated = False
+
+def validate_network_storage():
+    """Validate that network storage setup is complete"""
+    global COMFYUI_PATH, environment_validated
+    
+    if environment_validated:
+        return True
+    
+    try:
+        logger.info("🔍 Validating network storage setup...")
+        
+        # Check virtual environment
+        venv_python = Path(NETWORK_STORAGE_VENV) / "bin" / "python"
+        if not venv_python.exists():
+            logger.error(f"❌ Virtual environment not found: {venv_python}")
+            return False
+        
+        # Check ComfyUI installation
+        comfyui_main = Path(NETWORK_STORAGE_COMFYUI) / "main.py"
+        if not comfyui_main.exists():
+            logger.error(f"❌ ComfyUI not found: {comfyui_main}")
+            return False
+        
+        # Check custom nodes
+        custom_nodes_dir = Path(NETWORK_STORAGE_COMFYUI) / "custom_nodes"
+        if not custom_nodes_dir.exists():
+            logger.error(f"❌ Custom nodes directory not found: {custom_nodes_dir}")
+            return False
+        
+        # Check for key custom nodes
+        required_nodes = [
+            "ComfyUI-Manager",
+            "ComfyUI-KJNodes", 
+            "ComfyUI-TeaCache"
+        ]
+        
+        for node in required_nodes:
+            node_path = custom_nodes_dir / node
+            if not node_path.exists():
+                logger.warning(f"⚠️ Custom node not found: {node}")
+        
+        # Check models directory structure
+        models_dir = Path(NETWORK_STORAGE_COMFYUI) / "models"
+        required_model_dirs = ["diffusion_models", "vae", "text_encoders", "clip_vision", "loras"]
+        
+        for model_dir in required_model_dirs:
+            model_path = models_dir / model_dir
+            if not model_path.exists():
+                logger.warning(f"⚠️ Model directory not found: {model_path}")
+        
+        # Set global paths
+        COMFYUI_PATH = str(NETWORK_STORAGE_COMFYUI)
+        environment_validated = True
+        
+        logger.info("✅ Network storage validation complete")
+        logger.info(f"📁 ComfyUI path: {COMFYUI_PATH}")
+        logger.info(f"🐍 Python path: {venv_python}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Network storage validation failed: {e}")
+        return False
+
+def activate_network_storage_environment():
+    """Activate the network storage virtual environment"""
+    try:
+        logger.info("🔧 Activating network storage environment...")
+        
+        # Set virtual environment paths
+        venv_bin = str(Path(NETWORK_STORAGE_VENV) / "bin")
+        venv_python = str(Path(NETWORK_STORAGE_VENV) / "bin" / "python")
+        
+        # Update PATH to prioritize venv
+        current_path = os.environ.get("PATH", "")
+        if venv_bin not in current_path:
+            os.environ["PATH"] = f"{venv_bin}:{current_path}"
+        
+        # Set Python paths
+        os.environ["VIRTUAL_ENV"] = NETWORK_STORAGE_VENV
+        sys.executable = venv_python
+        
+        # Add ComfyUI to Python path
+        comfyui_path = str(NETWORK_STORAGE_COMFYUI)
+        if comfyui_path not in sys.path:
+            sys.path.insert(0, comfyui_path)
+        
+        # Update PYTHONPATH environment variable
+        current_pythonpath = os.environ.get("PYTHONPATH", "")
+        if comfyui_path not in current_pythonpath:
+            os.environ["PYTHONPATH"] = f"{comfyui_path}:{current_pythonpath}" if current_pythonpath else comfyui_path
+        
+        logger.info("✅ Network storage environment activated")
+        logger.info(f"🐍 Python executable: {sys.executable}")
+        logger.info(f"📦 Virtual env: {os.environ.get('VIRTUAL_ENV')}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to activate network storage environment: {e}")
+        return False
 
 def clear_triton_cache():
     """Clear triton cache to fix compilation issues"""
@@ -130,16 +237,26 @@ def load_effects_config():
         return False
 
 def start_comfyui():
-    """Start ComfyUI with SageAttention using proven configuration"""
+    """Start ComfyUI with SageAttention using network storage"""
     global comfyui_process, comfyui_initialized, sage_attention_available
     
     if comfyui_initialized:
         return True
     
     try:
-        logger.info("🚀 Starting ComfyUI with proven SageAttention setup...")
+        logger.info("🚀 Starting ComfyUI with network storage SageAttention setup...")
         
-        # Test SageAttention first
+        # Validate network storage first
+        if not validate_network_storage():
+            logger.error("❌ Network storage validation failed")
+            return False
+        
+        # Activate network storage environment
+        if not activate_network_storage_environment():
+            logger.error("❌ Failed to activate network storage environment")
+            return False
+        
+        # Test SageAttention
         sage_attention_available = test_sage_attention()
         
         if not sage_attention_available:
@@ -153,33 +270,24 @@ def start_comfyui():
         # Change to ComfyUI directory
         os.chdir(COMFYUI_PATH)
         
-        # Set environment for optimal performance (based on their setup)
+        # Set environment for optimal performance
         env = os.environ.copy()
         env.update({
             'CUDA_VISIBLE_DEVICES': '0',
             'PYTHONPATH': f"{COMFYUI_PATH}:{env.get('PYTHONPATH', '')}",
             'PYTHONUNBUFFERED': 'true',
             'TRITON_CACHE_DIR': '/tmp/triton_runtime',
-            'HF_HOME': '/workspace'
+            'HF_HOME': '/workspace',
+            'VIRTUAL_ENV': NETWORK_STORAGE_VENV,
+            'PATH': f"{Path(NETWORK_STORAGE_VENV) / 'bin'}:{env.get('PATH', '')}"
         })
         
-        # Use libtcmalloc for better memory management (from their setup)
-        try:
-            import subprocess
-            result = subprocess.run(['ldconfig', '-p'], capture_output=True, text=True)
-            for line in result.stdout.split('\n'):
-                if 'libtcmalloc.so' in line:
-                    tcmalloc_path = line.split(' => ')[1].strip() if ' => ' in line else ''
-                    if tcmalloc_path:
-                        env['LD_PRELOAD'] = tcmalloc_path
-                        logger.info(f"🔧 Using libtcmalloc: {tcmalloc_path}")
-                        break
-        except Exception as e:
-            logger.warning(f"⚠️ Could not set libtcmalloc: {e}")
+        # Use the network storage Python executable
+        python_executable = str(Path(NETWORK_STORAGE_VENV) / "bin" / "python")
         
-        # Start ComfyUI with SageAttention (using their proven flags)
+        # Start ComfyUI with SageAttention
         cmd = [
-            "python", "-u", "main.py",
+            python_executable, "-u", "main.py",
             "--port", "8188",
             "--use-sage-attention",
             "--base-directory", COMFYUI_PATH,
@@ -189,9 +297,10 @@ def start_comfyui():
             "--log-stdout"
         ]
         
-        logger.info("🚀 Starting ComfyUI with SageAttention ENABLED")
+        logger.info("🚀 Starting ComfyUI with SageAttention ENABLED (network storage)")
         logger.info(f"🔍 ComfyUI command: {' '.join(cmd)}")
         logger.info(f"📁 Working directory: {os.getcwd()}")
+        logger.info(f"🐍 Python executable: {python_executable}")
         
         # Start ComfyUI in background
         comfyui_process = subprocess.Popen(
@@ -210,7 +319,7 @@ def start_comfyui():
             try:
                 response = requests.get(f"http://{COMFYUI_SERVER}/", timeout=2)
                 if response.status_code == 200:
-                    logger.info("✅ ComfyUI started successfully!")
+                    logger.info("✅ ComfyUI started successfully with network storage!")
                     comfyui_initialized = True
                     return True
             except requests.RequestException:
@@ -268,7 +377,7 @@ def process_input_image(image_data: str) -> Optional[str]:
         if image.mode != "RGB":
             image = image.convert("RGB")
         
-        # Save to ComfyUI input directory
+        # Save to ComfyUI input directory (network storage)
         filename = f"input_{uuid.uuid4().hex[:8]}.jpg"
         input_path = Path(COMFYUI_PATH) / "input" / filename
         input_path.parent.mkdir(exist_ok=True)
@@ -335,7 +444,7 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
                     node["inputs"]["generation_height"] = params.get("height", 720)
                     node["inputs"]["num_frames"] = params.get("frames", 85)
             
-            # Use SageAttention (we know it's available)
+            # Use SageAttention (we know it's available from network storage)
             elif node_type == "WanVideoModelLoader":
                 if "inputs" in node:
                     node["inputs"]["attention_mode"] = "sageattn"
@@ -477,7 +586,15 @@ def check_gpu_memory():
 def handler(job):
     """Main RunPod handler"""
     try:
-        logger.info("🎬 Processing job with SageAttention...")
+        logger.info("🎬 Processing job with network storage SageAttention...")
+        
+        # Validate network storage setup first
+        if not validate_network_storage():
+            return {"error": "Network storage validation failed - ensure your RunPod endpoint is using the correct network storage"}
+        
+        # Activate network storage environment
+        if not activate_network_storage_environment():
+            return {"error": "Failed to activate network storage environment"}
         
         # Check GPU memory at start
         check_gpu_memory()
@@ -488,7 +605,7 @@ def handler(job):
         
         # Start ComfyUI with SageAttention (will fail if SageAttention not available)
         if not start_comfyui():
-            return {"error": "Failed to start ComfyUI with SageAttention"}
+            return {"error": "Failed to start ComfyUI with SageAttention from network storage"}
         
         # Load workflow template
         workflow = load_workflow()
@@ -522,7 +639,7 @@ def handler(job):
             "seed": job_input.get("seed", -1)
         }
         
-        logger.info(f"🎭 Processing effect: {params['effect']} with SageAttention")
+        logger.info(f"🎭 Processing effect: {params['effect']} with network storage SageAttention")
         
         # Customize workflow
         workflow = customize_workflow(workflow, params)
@@ -560,7 +677,8 @@ def handler(job):
             "prompt_id": prompt_id,
             "filename": Path(video_path).name,
             "processing_time": time.time(),
-            "sage_attention_used": True
+            "sage_attention_used": True,
+            "network_storage_used": True
         }
         
     except Exception as e:
@@ -569,9 +687,9 @@ def handler(job):
 
 # Initialize on startup
 if __name__ == "__main__":
-    logger.info("🚀 Starting AI-Avatarka Worker with Clean SageAttention Setup...")
-    logger.info("✅ Models baked into Docker image")
-    logger.info("🔧 Using proven PyTorch 2.7.0 + CUDA 12.8.1 + SageAttention stack")
+    logger.info("🚀 Starting AI-Avatarka Worker with Network Storage...")
+    logger.info("📁 Using network storage for all dependencies and models")
+    logger.info("🧠 SageAttention setup from network storage")
     
     logger.info("🎯 Starting RunPod serverless worker...")
     runpod.serverless.start({"handler": handler})
