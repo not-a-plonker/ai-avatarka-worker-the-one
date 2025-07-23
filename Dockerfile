@@ -62,9 +62,6 @@ RUN for dir in /workspace/ComfyUI/custom_nodes/*/; do \
         fi; \
     done
 
-# Set target GPU architectures for compilation without GPU present
-ENV TORCH_CUDA_ARCH_LIST="8.9;9.0"
-ENV CUDA_ARCH_LIST="89;90"
 ENV MAX_JOBS=4
 
 # Install SageAttention from source (with GPU architecture specification)
@@ -75,9 +72,6 @@ RUN echo "📦 Installing SageAttention from source..." && \
     echo "Python: $(python --version)" && \
     echo "CUDA: $(nvcc --version || echo 'nvcc not found')" && \
     echo "PyTorch: $(python -c 'import torch; print(torch.__version__)')" && \
-    echo "Target GPU architectures: $TORCH_CUDA_ARCH_LIST" && \
-    export TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST && \
-    export CUDA_ARCH_LIST=$CUDA_ARCH_LIST && \
     python setup.py install --verbose && \
     cd .. && \
     rm -rf SageAttention && \
