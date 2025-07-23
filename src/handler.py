@@ -32,8 +32,8 @@ NETWORK_STORAGE_COMFYUI = os.environ.get("COMFYUI_PATH", "/workspace/ComfyUI")
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
 COMFYUI_SERVER = "127.0.0.1:8188"
-EFFECTS_CONFIG = "/workspace/prompts/effects.json"  # Back to workspace paths
-WORKFLOW_PATH = "/workspace/workflow/universal_i2v.json"  # Back to workspace pathsYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
+EFFECTS_CONFIG = "/prompts/effects.json"  # Files copied to network storage root
+WORKFLOW_PATH = "/workflow/universal_i2v.json"  # Files copied to network storage rootYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
 
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
