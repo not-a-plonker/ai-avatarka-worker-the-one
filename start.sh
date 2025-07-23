@@ -40,8 +40,8 @@ if [ -d "/runpod-volume" ]; then
   
   cd $COMFYUI_DIR
   
-  # Set ComfyUI-Manager to offline mode (from runpod-wan)
-  comfy-manager-set-mode offline || echo "⚠️ Could not set ComfyUI-Manager network_mode" >&2
+  # ComfyUI-Manager offline mode (command not available, skipping)
+  echo "ℹ️ Skipping ComfyUI-Manager offline mode (not required)"
   
   echo "🚀 Starting ComfyUI"
   # Allow operators to tweak verbosity; default is INFO.

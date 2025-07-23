@@ -9,16 +9,16 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 WORKDIR /workspace
 
-# Install only essential system dependencies
+# Install only essential system dependencies (Python 3.11 to match venv)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-venv \
-    python3.10-dev \
+    python3.11 \
+    python3.11-venv \
+    python3.11-dev \
     curl \
     wget \
     git \
-    && ln -sf /usr/bin/python3.10 /usr/bin/python \
-    && ln -sf /usr/bin/python3.10 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
