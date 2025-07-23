@@ -6,7 +6,6 @@
       "quantization": "fp8_e4m3fn",
       "load_device": "offload_device",
       "attention_mode": "sageattn",
-      "block_swap_args": [0, 0],
       "lora": ["41", 0]
     },
     "class_type": "WanVideoModelLoader",
