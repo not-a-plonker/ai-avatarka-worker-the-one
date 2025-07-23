@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: GPU_CUNT
+    runs-on: cunt
     timeout-minutes: 240  # 4 hour timeout for clean build with SageAttention compilation + 35GB models
     
     steps:
