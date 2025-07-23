@@ -1,15 +1,4 @@
 {
-  "32": {
-    "inputs": {
-      "offload_txt_emb": true,
-      "offload_img_emb": true,
-      "blocks_to_swap": 0
-    },
-    "class_type": "WanVideoBlockSwap",
-    "_meta": {
-      "title": "WanVideoBlockSwap"
-    }
-  },
   "22": {
     "inputs": {
       "model": "wan2.1_i2v_480p_14B_bf16.safetensors",
@@ -17,7 +6,7 @@
       "quantization": "fp8_e4m3fn",
       "load_device": "offload_device",
       "attention_mode": "sageattn",
-      "block_swap_args": ["32", 0],
+      "block_swap_args": [0, 0],
       "lora": ["41", 0]
     },
     "class_type": "WanVideoModelLoader",
