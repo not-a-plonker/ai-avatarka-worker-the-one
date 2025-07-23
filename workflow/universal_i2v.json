@@ -3,7 +3,7 @@
     "inputs": {
       "offload_txt_emb": true,
       "offload_img_emb": true,
-      "blocks_to_swap": 10
+      "blocks_to_swap": 0
     },
     "class_type": "WanVideoBlockSwap",
     "_meta": {
