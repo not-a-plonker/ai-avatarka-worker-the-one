@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: cunt
     timeout-minutes: 240  # 4 hour timeout for clean build with SageAttention compilation + 35GB models
     
     steps:
@@ -74,8 +74,7 @@ jobs:
         rm -rf /tmp/.buildx-cache
         mv /tmp/.buildx-cache-new /tmp/.buildx-cache || echo "No new cache to move"
         
-      # - name: Verify Clean Build Image
-      if: false 
+    - name: Verify Clean Build Image
       run: |
         echo "🔍 Verifying clean SageAttention build..."
         
