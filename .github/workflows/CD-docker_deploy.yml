@@ -75,32 +75,33 @@ jobs:
         mv /tmp/.buildx-cache-new /tmp/.buildx-cache || echo "No new cache to move"
         
       # - name: Verify Clean Build Image
-      # run: |
-        #echo "🔍 Verifying clean SageAttention build..."
+      if: false 
+      run: |
+        echo "🔍 Verifying clean SageAttention build..."
         
         # Get image size
-        #IMAGE_SIZE=$(docker images ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest --format "table {{.Size}}" | tail -n 1)
-        #echo "IMAGE_SIZE=$IMAGE_SIZE" >> $GITHUB_ENV
+        IMAGE_SIZE=$(docker images ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest --format "table {{.Size}}" | tail -n 1)
+        echo "IMAGE_SIZE=$IMAGE_SIZE" >> $GITHUB_ENV
         
         # Test basic Python environment
-        #echo "🧪 Testing Python 3.10 + CUDA 12.8.1 base..."
-        #timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest python --version || echo "⚠️ Python test failed"
+        echo "🧪 Testing Python 3.10 + CUDA 12.8.1 base..."
+        timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest python --version || echo "⚠️ Python test failed"
         
         # Test PyTorch + CUDA
-        #echo "🧪 Testing PyTorch 2.7.0 + CUDA..."
+        echo "🧪 Testing PyTorch 2.7.0 + CUDA..."
         timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.version.cuda}'); print(f'CUDA Available: {torch.cuda.is_available()}')" || echo "⚠️ PyTorch test failed"
         
         # Test SageAttention import
-        #echo "🧪 Testing SageAttention installation..."
-        #timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest python -c "import sageattention; print('✅ SageAttention available')" || echo "⚠️ SageAttention test failed - this is critical!"
+        echo "🧪 Testing SageAttention installation..."
+        timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest python -c "import sageattention; print('✅ SageAttention available')" || echo "⚠️ SageAttention test failed - this is critical!"
         
         # Test ComfyUI presence
-        #echo "🧪 Testing ComfyUI installation..."
-        #timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest ls -la /workspace/ComfyUI/main.py || echo "⚠️ ComfyUI test failed"
+        echo "🧪 Testing ComfyUI installation..."
+        timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest ls -la /workspace/ComfyUI/main.py || echo "⚠️ ComfyUI test failed"
         
         # Test model presence
-       # echo "🧪 Testing baked models..."
-        #timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest ls -lh /workspace/ComfyUI/models/diffusion_models/ || echo "⚠️ Models test failed"
+        echo "🧪 Testing baked models..."
+        timeout 60 docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/ai-avatarka-clean:latest ls -lh /workspace/ComfyUI/models/diffusion_models/ || echo "⚠️ Models test failed"
         
     - name: Test Handler Import
       run: |
