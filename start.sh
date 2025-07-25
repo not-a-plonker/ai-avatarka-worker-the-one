@@ -44,12 +44,15 @@ if [ -d "/runpod-volume" ]; then
   
   cd $COMFYUI_DIR
   
+  # Set ComfyUI-Manager to offline mode (following runpod-wan pattern)
+  comfy-manager-set-mode offline || echo "⚠️ Could not set ComfyUI-Manager network_mode (script not found)" >&2
+  
   echo "🚀 Starting ComfyUI in offline mode (no registry fetching)"
   # Allow operators to tweak verbosity; default is INFO.
   : "${COMFY_LOG_LEVEL:=INFO}"
 
-  # Start ComfyUI in background with offline mode to prevent registry downloads
-  python -u $COMFYUI_DIR/main.py --port 8188 --use-sage-attention --base-directory $COMFYUI_DIR --disable-auto-launch --disable-metadata --verbose "${COMFY_LOG_LEVEL}" --log-stdout --offline &
+  # Start ComfyUI in background (offline mode set above)
+  python -u $COMFYUI_DIR/main.py --port 8188 --use-sage-attention --base-directory $COMFYUI_DIR --disable-auto-launch --disable-metadata --verbose "${COMFY_LOG_LEVEL}" --log-stdout &
   
   # Wait a moment for ComfyUI to start
   sleep 5
