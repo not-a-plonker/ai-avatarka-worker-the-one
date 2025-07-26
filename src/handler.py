@@ -276,44 +276,83 @@ def process_input_image(image_data: str) -> Optional[str]:
         return None
 
 def customize_workflow(workflow: Dict, params: Dict) -> Dict:
-    """Customize workflow with effect and parameters"""
+    """Customize workflow with effect and parameters - WITH DEBUGGING"""
     try:
         # Get effect configuration
         effects = effects_data.get('effects', {}) if effects_data else {}
         effect_config = effects.get(params['effect'], {})
         
+        # DEBUG: Log what prompts we're trying to use
+        positive_prompt = params.get("prompt", effect_config.get("prompt", ""))
+        negative_prompt = params.get("negative_prompt", effect_config.get("negative_prompt", ""))
+        
+        logger.info(f"🎭 EFFECT CONFIG FOR {params['effect']}:")
+        logger.info(f"📝 POSITIVE PROMPT: {positive_prompt}")
+        logger.info(f"❌ NEGATIVE PROMPT: {negative_prompt}")
+        logger.info(f"🎯 LORA: {effect_config.get('lora', 'NONE')}")
+        
         # Update workflow nodes by replacing placeholders
+        prompt_nodes_found = 0
+        placeholder_found = False
+        
         for node_id, node in workflow.items():
             node_type = node.get("class_type", "")
             
             # Update image input node (LoadImage)
             if node_type == "LoadImage":
                 if "inputs" in node and "image" in node["inputs"]:
+                    logger.info(f"🖼️ LoadImage node {node_id}: current image = {node['inputs']['image']}")
                     if node["inputs"]["image"] == "PLACEHOLDER_IMAGE":
                         node["inputs"]["image"] = params["image_filename"]
+                        logger.info(f"✅ Set image to: {params['image_filename']}")
+                        placeholder_found = True
             
             # Update LoRA selection (WanVideoLoraSelect)
             elif node_type == "WanVideoLoraSelect":
                 if "inputs" in node:
                     lora_name = effect_config.get("lora", f"{params['effect']}.safetensors")
+                    logger.info(f"🎯 LoRA node {node_id}: current lora = {node['inputs'].get('lora_name', 'NONE')}")
+                    
                     if node["inputs"].get("lora_name") == "PLACEHOLDER_LORA":
                         node["inputs"]["lora_name"] = lora_name
+                        logger.info(f"✅ Set lora_name to: {lora_name}")
+                        placeholder_found = True
                     if node["inputs"].get("lora") == "PLACEHOLDER_LORA":
                         node["inputs"]["lora"] = lora_name
+                        logger.info(f"✅ Set lora to: {lora_name}")
+                        placeholder_found = True
+                    
                     # Set strength from effect config
                     node["inputs"]["strength"] = effect_config.get("lora_strength", 1.0)
+                    logger.info(f"✅ Set lora strength to: {effect_config.get('lora_strength', 1.0)}")
             
-            # Update text prompts (WanVideoTextEncode)
+            # Update text prompts (WanVideoTextEncode) - THIS IS THE IMPORTANT ONE
             elif node_type == "WanVideoTextEncode":
+                prompt_nodes_found += 1
                 if "inputs" in node:
-                    # Use custom prompt or effect default
-                    positive_prompt = params.get("prompt", effect_config.get("prompt", ""))
-                    negative_prompt = params.get("negative_prompt", effect_config.get("negative_prompt", ""))
+                    logger.info(f"📝 TEXT NODE {node_id} FOUND:")
+                    logger.info(f"   Current positive_prompt: {node['inputs'].get('positive_prompt', 'NONE')}")
+                    logger.info(f"   Current negative_prompt: {node['inputs'].get('negative_prompt', 'NONE')}")
                     
+                    # Check for placeholders and replace
                     if node["inputs"].get("positive_prompt") == "PLACEHOLDER_PROMPT":
                         node["inputs"]["positive_prompt"] = positive_prompt
+                        logger.info(f"✅ REPLACED positive_prompt with: {positive_prompt[:100]}...")
+                        placeholder_found = True
+                    elif "positive_prompt" in node["inputs"]:
+                        logger.warning(f"⚠️ positive_prompt exists but is NOT placeholder: '{node['inputs']['positive_prompt']}'")
+                    
                     if node["inputs"].get("negative_prompt") == "PLACEHOLDER_NEGATIVE_PROMPT":
                         node["inputs"]["negative_prompt"] = negative_prompt
+                        logger.info(f"✅ REPLACED negative_prompt with: {negative_prompt}")
+                        placeholder_found = True
+                    elif "negative_prompt" in node["inputs"]:
+                        logger.warning(f"⚠️ negative_prompt exists but is NOT placeholder: '{node['inputs']['negative_prompt']}'")
+                    
+                    # Log final values
+                    logger.info(f"📋 FINAL VALUES for node {node_id}:")
+                    logger.info(f"   positive_prompt: {node['inputs'].get('positive_prompt', 'NONE')[:100]}...")
+                    logger.info(f"   negative_prompt: {node['inputs'].get('negative_prompt', 'NONE')}")
             
             # Update sampling parameters (WanVideoSampler)
             elif node_type == "WanVideoSampler":
@@ -322,6 +361,7 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
                     node["inputs"]["cfg"] = params.get("cfg", 6)
                     node["inputs"]["seed"] = params.get("seed", -1)
                     node["inputs"]["frames"] = params.get("frames", 85)
+                    logger.info(f"⚙️ Sampler node {node_id}: steps={params.get('steps', 10)}, cfg={params.get('cfg', 6)}")
             
             # Update video output parameters
             elif node_type == "VHS_VideoCombine":
@@ -339,6 +379,17 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
             elif node_type == "WanVideoModelLoader":
                 if "inputs" in node:
                     logger.info("🎯 Found WanVideoModelLoader with SageAttention mode")
+        
+        # Summary logging
+        logger.info(f"📊 WORKFLOW CUSTOMIZATION SUMMARY:")
+        logger.info(f"   Text nodes found: {prompt_nodes_found}")
+        logger.info(f"   Placeholders found and replaced: {placeholder_found}")
+        
+        if prompt_nodes_found == 0:
+            logger.error("❌ NO WanVideoTextEncode nodes found in workflow!")
+        
+        if not placeholder_found:
+            logger.warning("⚠️ NO placeholders found - workflow might have hardcoded values!")
         
         logger.info(f"✅ Workflow customized for effect: {params['effect']}")
         return workflow
