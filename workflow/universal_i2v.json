@@ -101,7 +101,7 @@
     "inputs": {
       "steps": 10,
       "cfg": 6,
-      "shift": 1.0,
+      "shift": 5.0,
       "riflex_freq_index": 0,
       "force_offload": true,
       "frames": 85,
