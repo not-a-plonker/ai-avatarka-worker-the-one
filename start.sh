@@ -60,7 +60,7 @@ if [ -d "/runpod-volume" ]; then
   echo "🎯 Starting RunPod Handler"
   # Export ComfyUI path for handler
   export COMFYUI_PATH=$COMFYUI_DIR
-  python -u /rp_handler.py
+  exec python -u /rp_handler.py
 else
   echo "❌ Warning: /runpod-volume does not exist"
   exit 1
