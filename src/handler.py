@@ -379,7 +379,7 @@ def submit_workflow(workflow: Dict) -> Optional[str]:
         return None
 
 def wait_for_completion(prompt_id: str) -> Optional[str]:
-    """FIXED: Wait for workflow completion using ComfyUI history - NO TIMEOUT, NO INFINITE LOOP"""
+    """FIXED: Wait for workflow completion using ComfyUI history - with detailed logging"""
     try:
         start_time = time.time()
         
@@ -394,40 +394,66 @@ def wait_for_completion(prompt_id: str) -> Optional[str]:
                         prompt_info = history[prompt_id]
                         status = prompt_info.get("status", {})
                         
-                        # FIXED: Check if completed and BREAK the loop
+                        # LOG THE FULL RESPONSE when completed
                         if status.get("completed", False):
+                            logger.info(f"🔍 Full history response for {prompt_id}:")
+                            logger.info(json.dumps(prompt_info, indent=2))
+                            
                             outputs = prompt_info.get("outputs", {})
+                            logger.info(f"📋 Found {len(outputs)} output nodes")
                             
                             # Look for video output in any node
                             for node_id, node_outputs in outputs.items():
-                                if "videos" in node_outputs and len(node_outputs["videos"]) > 0:
-                                    video_info = node_outputs["videos"][0]
-                                    filename = video_info["filename"]
+                                logger.info(f"🔍 Node {node_id} outputs: {list(node_outputs.keys())}")
+                                
+                                if "videos" in node_outputs:
+                                    logger.info(f"🎥 Found videos in node {node_id}: {node_outputs['videos']}")
                                     
-                                    # CORRECT PATH: /workspace/ComfyUI/output
-                                    video_path = Path("/workspace/ComfyUI/output") / filename
-                                    
-                                    if video_path.exists():
-                                        logger.info(f"✅ Video found for prompt {prompt_id}: {filename}")
-                                        return str(video_path)  # BREAK - return the video path
-                                    else:
-                                        logger.warning(f"⚠️ Video file not found: {video_path}")
-                                        # Debug what's in output folder
-                                        output_dir = Path("/workspace/ComfyUI/output")
-                                        if output_dir.exists():
-                                            files = list(output_dir.glob("*.mp4"))
-                                            logger.info(f"📁 MP4 files in output: {[f.name for f in files]}")
+                                    if len(node_outputs["videos"]) > 0:
+                                        video_info = node_outputs["videos"][0]
+                                        filename = video_info["filename"]
+                                        
+                                        # Try multiple possible paths
+                                        possible_paths = [
+                                            Path("/workspace/ComfyUI/output") / filename,
+                                            Path("/workspace/ComfyUI/output") / video_info.get("subfolder", "") / filename,
+                                            Path(COMFYUI_PATH) / "output" / filename,
+                                            Path(COMFYUI_PATH) / "output" / video_info.get("subfolder", "") / filename
+                                        ]
+                                        
+                                        logger.info(f"🔍 Checking paths for {filename}:")
+                                        for i, path in enumerate(possible_paths):
+                                            exists = path.exists()
+                                            logger.info(f"  {i+1}. {path} - {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
+                                            if exists:
+                                                logger.info(f"✅ Video found: {path}")
+                                                return str(path)
+                                        
+                                        # Log what files are actually in the output directory
+                                        output_dirs = [
+                                            Path("/workspace/ComfyUI/output"),
+                                            Path(COMFYUI_PATH) / "output"
+                                        ]
+                                        
+                                        for output_dir in output_dirs:
+                                            if output_dir.exists():
+                                                all_files = list(output_dir.rglob("*"))
+                                                logger.info(f"📁 All files in {output_dir}:")
+                                                for file in all_files[:10]:  # Show first 10 files
+                                                    logger.info(f"   - {file}")
+                                                if len(all_files) > 10:
+                                                    logger.info(f"   ... and {len(all_files) - 10} more files")
                             
                             # If we get here, workflow completed but no video found
                             logger.error(f"❌ Workflow completed but no video output found for {prompt_id}")
-                            return None  # BREAK - return None if no video
+                            return None
                         
-                        # FIXED: Check if failed and BREAK the loop
+                        # Check if failed
                         elif "error" in status or status.get("status_str") == "error":
                             logger.error(f"❌ Workflow failed for {prompt_id}: {status}")
-                            return None  # BREAK - return None on error
+                            return None
                 
-                # Log progress every 30 seconds (no timeout, RunPod handles it)
+                # Log progress every 30 seconds
                 elapsed = time.time() - start_time
                 if elapsed % 30 < 2:
                     logger.info(f"⏳ Still processing {prompt_id}... ({elapsed:.1f}s elapsed)")
@@ -435,7 +461,7 @@ def wait_for_completion(prompt_id: str) -> Optional[str]:
             except Exception as e:
                 logger.warning(f"⚠️ Error checking status for {prompt_id}: {e}")
             
-            time.sleep(2)  # Wait 2 seconds before next check
+            time.sleep(2)
         
     except Exception as e:
         logger.error(f"❌ Error waiting for completion: {str(e)}")
