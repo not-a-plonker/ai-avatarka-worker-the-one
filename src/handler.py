@@ -1,6 +1,6 @@
 """
 AI-Avatarka RunPod Serverless Worker Handler
-Updated for Network Storage Setup
+FIXED VERSION - No infinite loop, proper status, correct paths
 """
 
 import runpod
@@ -26,14 +26,7 @@ logger = logging.getLogger(__name__)
 # Network storage paths - get from environment or detect automatically
 NETWORK_STORAGE_BASE = "/workspace"
 NETWORK_STORAGE_VENV = "/workspace/venv"
-# ComfyUI path will be detected (could be comfywan or ComfyUI)
 NETWORK_STORAGE_COMFYUI = os.environ.get("COMFYUI_PATH", "/workspace/ComfyUI")
-
-# Runtime paths (will be set after validation)
-COMFYUI_PATH = None
-COMFYUI_SERVER = "127.0.0.1:8188"
-EFFECTS_CONFIG = "/prompts/effects.json"  # Files copied to network storage root
-WORKFLOW_PATH = "/workflow/universal_i2v.json"  # Files copied to network storage rootYUI = os.environ.get("NETWORK_STORAGE_COMFYUI", "/workspace/ComfyUI")
 
 # Runtime paths (will be set after validation)
 COMFYUI_PATH = None
@@ -221,25 +214,23 @@ def start_comfyui():
         return True
     
     try:
-        logger.info("🔍 Checking if ComfyUI is already running (started by start.sh)...")
+        logger.info("🔍 Checking if ComfyUI is ready...")
         
-        # Just wait for the existing ComfyUI to be ready
-        for attempt in range(60):  # 1 minute timeout
+        # Reduced timeout and better error handling
+        for attempt in range(30):  # 30 seconds timeout
             try:
-                response = requests.get(f"http://{COMFYUI_SERVER}/", timeout=2)
+                response = requests.get(f"http://{COMFYUI_SERVER}/", timeout=5)
                 if response.status_code == 200:
-                    logger.info("✅ ComfyUI already running and ready!")
+                    logger.info("✅ ComfyUI is ready!")
                     comfyui_initialized = True
                     return True
-            except requests.RequestException:
-                pass
-            
-            if attempt % 10 == 0:  # Log every 10 seconds
-                logger.info(f"⏳ Waiting for ComfyUI to be ready... ({attempt}/60)")
+            except requests.RequestException as e:
+                if attempt % 5 == 0:  # Log every 5 seconds
+                    logger.info(f"⏳ Waiting for ComfyUI... ({attempt}/30)")
             
             time.sleep(1)
         
-        logger.error("❌ ComfyUI not ready within timeout")
+        logger.error("❌ ComfyUI not ready within 30 seconds")
         return False
         
     except Exception as e:
@@ -388,39 +379,63 @@ def submit_workflow(workflow: Dict) -> Optional[str]:
         return None
 
 def wait_for_completion(prompt_id: str) -> Optional[str]:
-    """Wait for workflow completion and return output path"""
+    """FIXED: Wait for workflow completion using ComfyUI history - NO TIMEOUT, NO INFINITE LOOP"""
     try:
         start_time = time.time()
         
         while True:
             try:
-                # Check status
+                # Check ComfyUI history for THIS specific prompt_id
                 response = requests.get(f"http://{COMFYUI_SERVER}/history/{prompt_id}")
                 if response.status_code == 200:
                     history = response.json()
                     
                     if prompt_id in history:
-                        outputs = history[prompt_id].get("outputs", {})
+                        prompt_info = history[prompt_id]
+                        status = prompt_info.get("status", {})
                         
-                        # Look for video output
-                        for node_outputs in outputs.values():
-                            if "videos" in node_outputs:
-                                video_info = node_outputs["videos"][0]
-                                video_path = Path(COMFYUI_PATH) / "output" / video_info["filename"]
-                                
-                                if video_path.exists():
-                                    logger.info(f"✅ Video generated: {video_path}")
-                                    return str(video_path)
+                        # FIXED: Check if completed and BREAK the loop
+                        if status.get("completed", False):
+                            outputs = prompt_info.get("outputs", {})
+                            
+                            # Look for video output in any node
+                            for node_id, node_outputs in outputs.items():
+                                if "videos" in node_outputs and len(node_outputs["videos"]) > 0:
+                                    video_info = node_outputs["videos"][0]
+                                    filename = video_info["filename"]
+                                    
+                                    # CORRECT PATH: /workspace/ComfyUI/output
+                                    video_path = Path("/workspace/ComfyUI/output") / filename
+                                    
+                                    if video_path.exists():
+                                        logger.info(f"✅ Video found for prompt {prompt_id}: {filename}")
+                                        return str(video_path)  # BREAK - return the video path
+                                    else:
+                                        logger.warning(f"⚠️ Video file not found: {video_path}")
+                                        # Debug what's in output folder
+                                        output_dir = Path("/workspace/ComfyUI/output")
+                                        if output_dir.exists():
+                                            files = list(output_dir.glob("*.mp4"))
+                                            logger.info(f"📁 MP4 files in output: {[f.name for f in files]}")
+                            
+                            # If we get here, workflow completed but no video found
+                            logger.error(f"❌ Workflow completed but no video output found for {prompt_id}")
+                            return None  # BREAK - return None if no video
+                        
+                        # FIXED: Check if failed and BREAK the loop
+                        elif "error" in status or status.get("status_str") == "error":
+                            logger.error(f"❌ Workflow failed for {prompt_id}: {status}")
+                            return None  # BREAK - return None on error
                 
-                # Log progress every minute
+                # Log progress every 30 seconds (no timeout, RunPod handles it)
                 elapsed = time.time() - start_time
-                if elapsed % 60 < 2:
-                    logger.info(f"⏳ Still processing... ({elapsed/60:.1f} minutes elapsed)")
+                if elapsed % 30 < 2:
+                    logger.info(f"⏳ Still processing {prompt_id}... ({elapsed:.1f}s elapsed)")
                 
             except Exception as e:
-                logger.warning(f"⚠️ Error checking status: {e}")
+                logger.warning(f"⚠️ Error checking status for {prompt_id}: {e}")
             
-            time.sleep(2)
+            time.sleep(2)  # Wait 2 seconds before next check
         
     except Exception as e:
         logger.error(f"❌ Error waiting for completion: {str(e)}")
@@ -483,17 +498,27 @@ def check_gpu_memory():
         logger.warning(f"⚠️ Could not check GPU memory: {e}")
 
 def handler(job):
-    """Main RunPod handler"""
+    """FIXED: Main RunPod handler with proper status and no infinite loop"""
+    start_time = time.time()
+    
     try:
         logger.info("🎬 Processing job with network storage SageAttention...")
         
         # Validate network storage setup first
         if not validate_network_storage():
-            return {"error": "Network storage validation failed - ensure your RunPod endpoint is using the correct network storage"}
+            return {
+                "error": "Network storage validation failed",
+                "status": "FAILED",
+                "success": False
+            }
         
         # Activate network storage environment
         if not activate_network_storage_environment():
-            return {"error": "Failed to activate network storage environment"}
+            return {
+                "error": "Failed to activate network storage environment",
+                "status": "FAILED", 
+                "success": False
+            }
         
         # Check GPU memory at start
         check_gpu_memory()
@@ -502,14 +527,22 @@ def handler(job):
         if not effects_data and not load_effects_config():
             logger.warning("⚠️ Effects config not loaded - using defaults")
         
-        # Start ComfyUI (SageAttention will be handled by workflow nodes)
+        # Start ComfyUI
         if not start_comfyui():
-            return {"error": "Failed to start ComfyUI from network storage"}
+            return {
+                "error": "Failed to start ComfyUI from network storage",
+                "status": "FAILED",
+                "success": False
+            }
         
         # Load workflow template
         workflow = load_workflow()
         if not workflow:
-            return {"error": "Failed to load workflow"}
+            return {
+                "error": "Failed to load workflow",
+                "status": "FAILED",
+                "success": False
+            }
         
         # Get job input
         job_input = job.get("input", {})
@@ -517,11 +550,19 @@ def handler(job):
         # Process input image
         image_data = job_input.get("image")
         if not image_data:
-            return {"error": "No image provided"}
+            return {
+                "error": "No image provided",
+                "status": "FAILED",
+                "success": False
+            }
         
         image_filename = process_input_image(image_data)
         if not image_filename:
-            return {"error": "Failed to process input image"}
+            return {
+                "error": "Failed to process input image",
+                "status": "FAILED",
+                "success": False
+            }
         
         # Prepare parameters
         params = {
@@ -538,7 +579,7 @@ def handler(job):
             "seed": job_input.get("seed", -1)
         }
         
-        logger.info(f"🎭 Processing effect: {params['effect']} with ComfyUI SageAttention nodes")
+        logger.info(f"🎭 Processing effect: {params['effect']}")
         
         # Customize workflow
         workflow = customize_workflow(workflow, params)
@@ -546,43 +587,75 @@ def handler(job):
         # Submit workflow
         prompt_id = submit_workflow(workflow)
         if not prompt_id:
-            return {"error": "Failed to submit workflow"}
+            return {
+                "error": "Failed to submit workflow",
+                "status": "FAILED",
+                "success": False
+            }
         
-        # Wait for completion (no timeout - let RunPod handle it)
+        logger.info(f"✅ Workflow submitted with prompt_id: {prompt_id}")
+        
+        # FIXED: Wait for completion with proper loop handling
         video_path = wait_for_completion(prompt_id)
         if not video_path:
-            return {"error": "Video generation failed or timed out"}
+            return {
+                "error": "Video generation failed or timed out",
+                "status": "FAILED",
+                "success": False,
+                "prompt_id": prompt_id
+            }
         
         # Encode result
         video_base64 = encode_video_to_base64(video_path)
         if not video_base64:
-            return {"error": "Failed to encode output video"}
+            return {
+                "error": "Failed to encode output video",
+                "status": "FAILED", 
+                "success": False,
+                "prompt_id": prompt_id
+            }
         
-        # Check GPU memory at end
-        check_gpu_memory()
+        processing_time = time.time() - start_time
+        logger.info(f"✅ Processing completed in {processing_time:.2f} seconds")
         
-        # Clean up
+        # Clean up input file
         try:
             input_path = Path(COMFYUI_PATH) / "input" / image_filename
             if input_path.exists():
                 input_path.unlink()
                 logger.info("✅ Cleaned up input image")
-        except:
-            pass
+        except Exception as cleanup_error:
+            logger.warning(f"⚠️ Cleanup failed: {cleanup_error}")
         
-        return {
+        # FIXED: Return proper success response with explicit status
+        result = {
             "video": video_base64,
             "effect": params["effect"],
             "prompt_id": prompt_id,
             "filename": Path(video_path).name,
-            "processing_time": time.time(),
-            "sage_attention_used": True,  # Used by ComfyUI workflow nodes
+            "processing_time": processing_time,
+            "status": "COMPLETED",    # EXPLICIT STATUS for RunPod
+            "success": True,          # SUCCESS FLAG
+            "sage_attention_used": True,
             "network_storage_used": True
         }
         
+        logger.info(f"🎉 Returning successful result for effect: {params['effect']}")
+        logger.info(f"📝 Result keys: {list(result.keys())}")
+        
+        return result
+        
     except Exception as e:
-        logger.error(f"❌ Handler error: {str(e)}")
-        return {"error": f"Processing failed: {str(e)}"}
+        processing_time = time.time() - start_time
+        error_msg = f"Processing failed after {processing_time:.2f}s: {str(e)}"
+        logger.error(f"❌ Handler error: {error_msg}")
+        
+        return {
+            "error": error_msg,
+            "status": "FAILED",      # EXPLICIT FAILED STATUS
+            "success": False,
+            "processing_time": processing_time
+        }
 
 # Initialize on startup
 if __name__ == "__main__":
