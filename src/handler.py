@@ -379,7 +379,7 @@ def submit_workflow(workflow: Dict) -> Optional[str]:
         return None
 
 def wait_for_completion(prompt_id: str) -> Optional[str]:
-    """FIXED: Wait for workflow completion using ComfyUI history - with detailed logging"""
+    """FIXED: Wait for workflow completion - handle actual ComfyUI output format"""
     try:
         start_time = time.time()
         
@@ -394,58 +394,77 @@ def wait_for_completion(prompt_id: str) -> Optional[str]:
                         prompt_info = history[prompt_id]
                         status = prompt_info.get("status", {})
                         
-                        # LOG THE FULL RESPONSE when completed
+                        # Check if completed
                         if status.get("completed", False):
-                            logger.info(f"🔍 Full history response for {prompt_id}:")
-                            logger.info(json.dumps(prompt_info, indent=2))
-                            
+                            logger.info(f"✅ Workflow completed for {prompt_id}")
                             outputs = prompt_info.get("outputs", {})
-                            logger.info(f"📋 Found {len(outputs)} output nodes")
                             
-                            # Look for video output in any node
+                            # Look for video output in any node - try multiple formats
                             for node_id, node_outputs in outputs.items():
-                                logger.info(f"🔍 Node {node_id} outputs: {list(node_outputs.keys())}")
+                                logger.info(f"🔍 Checking node {node_id} with keys: {list(node_outputs.keys())}")
                                 
-                                if "videos" in node_outputs:
-                                    logger.info(f"🎥 Found videos in node {node_id}: {node_outputs['videos']}")
-                                    
-                                    if len(node_outputs["videos"]) > 0:
-                                        video_info = node_outputs["videos"][0]
-                                        filename = video_info["filename"]
+                                # Method 1: Look for "videos" key (standard format)
+                                if "videos" in node_outputs and len(node_outputs["videos"]) > 0:
+                                    video_info = node_outputs["videos"][0]
+                                    filename = video_info.get("filename")
+                                    if filename:
+                                        video_path = Path("/workspace/ComfyUI/output") / filename
+                                        if video_path.exists():
+                                            logger.info(f"✅ Found video via 'videos' key: {video_path}")
+                                            return str(video_path)
+                                
+                                # Method 2: Look for "fullpath" in any output structure
+                                def find_fullpath(obj):
+                                    if isinstance(obj, dict):
+                                        if "fullpath" in obj:
+                                            return obj["fullpath"]
+                                        for value in obj.values():
+                                            result = find_fullpath(value)
+                                            if result:
+                                                return result
+                                    elif isinstance(obj, list):
+                                        for item in obj:
+                                            result = find_fullpath(item)
+                                            if result:
+                                                return result
+                                    return None
+                                
+                                fullpath = find_fullpath(node_outputs)
+                                if fullpath:
+                                    video_path = Path(fullpath)
+                                    if video_path.exists():
+                                        logger.info(f"✅ Found video via 'fullpath': {video_path}")
+                                        return str(video_path)
+                                
+                                # Method 3: Look for any .mp4 files mentioned in the output
+                                output_str = str(node_outputs)
+                                if ".mp4" in output_str:
+                                    import re
+                                    mp4_matches = re.findall(r'["\']([^"\']*\.mp4)["\']', output_str)
+                                    for match in mp4_matches:
+                                        if match.startswith('/'):
+                                            video_path = Path(match)
+                                        else:
+                                            video_path = Path("/workspace/ComfyUI/output") / match
                                         
-                                        # Try multiple possible paths
-                                        possible_paths = [
-                                            Path("/workspace/ComfyUI/output") / filename,
-                                            Path("/workspace/ComfyUI/output") / video_info.get("subfolder", "") / filename,
-                                            Path(COMFYUI_PATH) / "output" / filename,
-                                            Path(COMFYUI_PATH) / "output" / video_info.get("subfolder", "") / filename
-                                        ]
-                                        
-                                        logger.info(f"🔍 Checking paths for {filename}:")
-                                        for i, path in enumerate(possible_paths):
-                                            exists = path.exists()
-                                            logger.info(f"  {i+1}. {path} - {'✅ EXISTS' if exists else '❌ NOT FOUND'}")
-                                            if exists:
-                                                logger.info(f"✅ Video found: {path}")
-                                                return str(path)
-                                        
-                                        # Log what files are actually in the output directory
-                                        output_dirs = [
-                                            Path("/workspace/ComfyUI/output"),
-                                            Path(COMFYUI_PATH) / "output"
-                                        ]
-                                        
-                                        for output_dir in output_dirs:
-                                            if output_dir.exists():
-                                                all_files = list(output_dir.rglob("*"))
-                                                logger.info(f"📁 All files in {output_dir}:")
-                                                for file in all_files[:10]:  # Show first 10 files
-                                                    logger.info(f"   - {file}")
-                                                if len(all_files) > 10:
-                                                    logger.info(f"   ... and {len(all_files) - 10} more files")
+                                        if video_path.exists():
+                                            logger.info(f"✅ Found video via regex: {video_path}")
+                                            return str(video_path)
+                            
+                            # Method 4: Last resort - look for newest .mp4 file in output directory
+                            output_dir = Path("/workspace/ComfyUI/output")
+                            if output_dir.exists():
+                                mp4_files = list(output_dir.glob("*.mp4"))
+                                if mp4_files:
+                                    # Get the newest mp4 file created after workflow started
+                                    newest_video = max(mp4_files, key=lambda f: f.stat().st_mtime)
+                                    if newest_video.stat().st_mtime > start_time:
+                                        logger.info(f"✅ Found newest video file: {newest_video}")
+                                        return str(newest_video)
                             
                             # If we get here, workflow completed but no video found
                             logger.error(f"❌ Workflow completed but no video output found for {prompt_id}")
+                            logger.info(f"🔍 Full outputs structure: {json.dumps(outputs, indent=2)}")
                             return None
                         
                         # Check if failed
