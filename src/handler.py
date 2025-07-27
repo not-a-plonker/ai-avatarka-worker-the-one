@@ -217,7 +217,7 @@ def start_comfyui():
         logger.info("🔍 Checking if ComfyUI is ready...")
         
         # Reduced timeout and better error handling
-        for attempt in range(30):  # 30 seconds timeout
+        for attempt in range(90):  # 90 seconds timeout
             try:
                 response = requests.get(f"http://{COMFYUI_SERVER}/", timeout=5)
                 if response.status_code == 200:
@@ -226,11 +226,11 @@ def start_comfyui():
                     return True
             except requests.RequestException as e:
                 if attempt % 5 == 0:  # Log every 5 seconds
-                    logger.info(f"⏳ Waiting for ComfyUI... ({attempt}/30)")
+                    logger.info(f"⏳ Waiting for ComfyUI... ({attempt}/90)")
             
             time.sleep(1)
         
-        logger.error("❌ ComfyUI not ready within 30 seconds")
+        logger.error("❌ ComfyUI not ready within 90 seconds")
         return False
         
     except Exception as e:
