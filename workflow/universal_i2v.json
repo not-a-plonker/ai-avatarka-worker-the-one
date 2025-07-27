@@ -105,7 +105,7 @@
       "riflex_freq_index": 0,
       "force_offload": true,
       "frames": 85,
-      "seed": -1,
+      "seed": 812989658032619,
       "control_after_generate": "fixed",
       "denoise": true,
       "scheduler": "dpm++",
