@@ -359,7 +359,7 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
                 if "inputs" in node:
                     node["inputs"]["steps"] = params.get("steps", 10)
                     node["inputs"]["cfg"] = params.get("cfg", 6)
-                    node["inputs"]["seed"] = params.get("seed", -1)
+                    node["inputs"]["seed"] = params.get("seed", 812989658032619)
                     node["inputs"]["frames"] = params.get("frames", 85)
                     logger.info(f"⚙️ Sampler node {node_id}: steps={params.get('steps', 10)}, cfg={params.get('cfg', 6)}")
             
@@ -672,7 +672,7 @@ def handler(job):
             "fps": job_input.get("fps", 16),
             "width": job_input.get("width", 720),
             "height": job_input.get("height", 720),
-            "seed": job_input.get("seed", -1)
+            "seed": job_input.get("seed", 812989658032619)
         }
         
         logger.info(f"🎭 Processing effect: {params['effect']}")
