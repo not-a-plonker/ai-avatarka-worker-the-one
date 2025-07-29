@@ -675,6 +675,8 @@ def handler(job):
             "seed": job_input.get("seed", 812989658032619)
         }
         
+        logger.info(f"🔍 PARAMS RECEIVED: width={params.get('width')}, height={params.get('height')}, steps={params.get('steps')}")
+
         logger.info(f"🎭 Processing effect: {params['effect']}")
         
         # Customize workflow
