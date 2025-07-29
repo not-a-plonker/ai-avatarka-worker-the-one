@@ -357,11 +357,11 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
             # Update sampling parameters (WanVideoSampler)
             elif node_type == "WanVideoSampler":
                 if "inputs" in node:
-                    node["inputs"]["steps"] = params.get("steps", 10)
+                    node["inputs"]["steps"] = params.get("steps", 20)
                     node["inputs"]["cfg"] = params.get("cfg", 6)
                     node["inputs"]["seed"] = params.get("seed", 812989658032619)
                     node["inputs"]["frames"] = params.get("frames", 85)
-                    logger.info(f"⚙️ Sampler node {node_id}: steps={params.get('steps', 10)}, cfg={params.get('cfg', 6)}")
+                    logger.info(f"⚙️ Sampler node {node_id}: steps={params.get('steps', 20)}, cfg={params.get('cfg', 6)}")
             
             # Update video output parameters
             elif node_type == "VHS_VideoCombine":
@@ -371,15 +371,14 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
             # Update image encoding parameters
             elif node_type == "WanVideoImageClipEncode":
                 if "inputs" in node:
-                    node["inputs"]["generation_width"] = params.get("width", 720)
-                    node["inputs"]["generation_height"] = params.get("height", 720)
+                    node["inputs"]["generation_width"] = params.get("width", 480)
+                    node["inputs"]["generation_height"] = params.get("height", 480)
                     node["inputs"]["num_frames"] = params.get("frames", 85)
             
             # SageAttention is already set in the workflow
             elif node_type == "WanVideoModelLoader":
                 if "inputs" in node:
-                    node["inputs"]["attention_mode"] = "sdpa"  
-                    logger.info("🎯 Found WanVideoModelLoader SET TO SDPA mode")
+                    logger.info("🎯 Found WanVideoModelLoader with SageAttention mode")
         
         # Summary logging
         logger.info(f"📊 WORKFLOW CUSTOMIZATION SUMMARY:")
@@ -667,12 +666,12 @@ def handler(job):
             "effect": job_input.get("effect", "ghostrider"),
             "prompt": job_input.get("prompt"),
             "negative_prompt": job_input.get("negative_prompt"),
-            "steps": job_input.get("steps", 10),
+            "steps": job_input.get("steps", 20),
             "cfg": job_input.get("cfg", 6),
             "frames": job_input.get("frames", 85),
             "fps": job_input.get("fps", 16),
-            "width": job_input.get("width", 720),
-            "height": job_input.get("height", 720),
+            "width": job_input.get("width", 480),
+            "height": job_input.get("height", 480),
             "seed": job_input.get("seed", 812989658032619)
         }
         
