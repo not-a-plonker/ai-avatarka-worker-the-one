@@ -378,7 +378,8 @@ def customize_workflow(workflow: Dict, params: Dict) -> Dict:
             # SageAttention is already set in the workflow
             elif node_type == "WanVideoModelLoader":
                 if "inputs" in node:
-                    logger.info("🎯 Found WanVideoModelLoader with SageAttention mode")
+                    node["inputs"]["attention_mode"] = "sdpa"  
+                    logger.info("🎯 Found WanVideoModelLoader SET TO SDPA mode")
         
         # Summary logging
         logger.info(f"📊 WORKFLOW CUSTOMIZATION SUMMARY:")
